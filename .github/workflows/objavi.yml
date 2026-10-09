@@ -1,0 +1,38 @@
+name: Objavi
+on:
+  schedule:
+    # Rezerva za budilnik (Cloudflare). GitHub cron kasni ili preskače, zato gusto.
+    # publish.py objavljuje tek kad je objava dospela i nikad dvaput. 12h i 20:30 Beograd.
+    - cron: "7,27,47 10-12 * * *"
+    - cron: "37,57 18-21 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Proba bez objave (1 = da)"
+        default: "1"
+      only_id:
+        description: "Objavi baš ovu objavu (npr. k03-10-12 ili r<video_id>), prazno = sledeća dospela"
+        default: ""
+permissions:
+  contents: write
+concurrency: objavi
+jobs:
+  objavi:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: main }   # najnoviji posted.json, ne stanje iz trenutka okidanja
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: python publish.py
+        env:
+          META_TOKEN: ${{ secrets.META_TOKEN }}
+          IG_ID: ${{ secrets.IG_ID }}
+          DRY_RUN: ${{ github.event.inputs.dry_run || '0' }}
+          ONLY_ID: ${{ github.event.inputs.only_id || '' }}
+      - if: always()
+        run: |
+          git config user.name "sarena-objave"; git config user.email "actions@users.noreply.github.com"
+          git add posted.json 2>/dev/null && git commit -qm "Objavljeno $(date -u +%F)" || exit 0
+          for i in 1 2 3; do git pull -q --rebase && git push -q && exit 0; sleep 5; done; exit 1
