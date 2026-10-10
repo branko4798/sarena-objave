@@ -17,8 +17,8 @@ ONLY = os.environ.get("ONLY_ID", "")          # ručno: objavi baš ovu objavu
 TZ = ZoneInfo("Europe/Belgrade")
 
 
-def call(method, path, **params):
-    params["access_token"] = TOKEN
+def call(method, path, token=None, **params):
+    params["access_token"] = token or TOKEN
     data = urllib.parse.urlencode(params).encode()
     url = f"{API}/{path}"
     req = urllib.request.Request(url + ("?" + data.decode() if method == "GET" else ""),
@@ -65,14 +65,16 @@ def instagram(post):
 def facebook(post):
     if DRY:
         return "dry:" + call("GET", PAGE_ID, fields="name")["name"]
+    # Neobjavljene slike za karusel Meta prima samo od same stranice -> token stranice.
+    pt = call("GET", PAGE_ID, fields="access_token")["access_token"]
     if post["kind"] == "reels":
-        return call("POST", f"{PAGE_ID}/videos", file_url=BASE + post["video"], description=post["caption"])["id"]
+        return call("POST", f"{PAGE_ID}/videos", pt, file_url=BASE + post["video"], description=post["caption"])["id"]
     urls = [BASE + p for p in post["images"]]
     if len(urls) == 1:
-        return call("POST", f"{PAGE_ID}/photos", url=urls[0], message=post["caption"])["id"]
-    ids = [call("POST", f"{PAGE_ID}/photos", url=u, published="false")["id"] for u in urls]
+        return call("POST", f"{PAGE_ID}/photos", pt, url=urls[0], message=post["caption"])["id"]
+    ids = [call("POST", f"{PAGE_ID}/photos", pt, url=u, published="false")["id"] for u in urls]
     media = json.dumps([{"media_fbid": i} for i in ids])
-    return call("POST", f"{PAGE_ID}/feed", message=post["caption"], attached_media=media)["id"]
+    return call("POST", f"{PAGE_ID}/feed", pt, message=post["caption"], attached_media=media)["id"]
 
 
 def main():
